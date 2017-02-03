@@ -43,7 +43,7 @@ html_form = """
                     </td>
                     <td>
                         <input type=text name="username" value="%(username)s" required>
-                        <span>%(error)s</span>
+                        <span class="error">%(error_name)s</span>
                     </td>
                 <tr>
                     <td>
@@ -51,16 +51,16 @@ html_form = """
                     </td>
                     <td>
                         <input type=password name="password" value="%(password)s" required>
-                        <span>%(error)s</span>
+                        <span class="error">%(error_pass)s</span>
                     </td>
                 </tr>
                 <tr>
                     <td>
-                        <label for="verify">Verify Password</label>
+                        <label for="verify">Verify password</label>
                     </td>
                     <td>
                         <input type=password name="verify" value="%(verify)s" required>
-                        <span>%(error)s</span>
+                        <span class="error">%(error_ver)s</span>
                     </td>
                 </tr>
                 <tr>
@@ -69,7 +69,7 @@ html_form = """
                     </td>
                     <td>
                         <input type=email name="email" value="%(email)s">
-                        <span>%(error)s</span>
+                        <span class="error">%(error_email)s</span>
                     </td>
                 </tr>
                 <tr>
@@ -84,38 +84,36 @@ html_form = """
 </html>
 """
 
-
 USER_RE = re.compile(r"^[a-zA-Z0-9_-]{3,20}$")
 def valid_username(username):
-    return USER_RE.match(username)
+    return username and USER_RE.match(username)
 
-USER_RE = re.compile(r"^.{3,20}$")
+PASS_RE = re.compile(r"^.{3,20}$")
 def valid_password(password):
-    return USER_RE.match(password)
+    return password and PASS_RE.match(password)
 
-USER_RE = re.compile(r"^.{3,20}$")
-def valid_verify(verify):
-    return USER_RE.match(verify)
-
-USER_RE = re.compile(r"^[\S]+@[\S]+.[\S]+$")
+EMAIL_RE = re.compile(r"^[\S]+@[\S]+.[\S]+$")
 def valid_email(email):
-    return USER_RE.match(email)
+    return not email or EMAIL_RE.match(email)
 
 def escape_html(s):
     return cgi.escape(s,quote = True)
 
 
 class MainHandler(webapp2.RequestHandler):
-    def write_form(self,error="",username="",password="",email="",verify=""):
-        self.response.out.write(html_form % {"error":error,
-                                        "username": escape_html(username),
+    def write_form(self,username="",password="",verify="",email="",
+                    error_name="",error_pass="",error_ver="",error_email=""):
+        self.response.out.write(html_form % {"username": escape_html(username),
                                         "password": escape_html(password),
                                         "verify": escape_html(verify),
-                                        "email": escape_html(email)})
+                                        "email": escape_html(email),
+                                        "error_name": error_name,
+                                        "error_pass": error_pass,
+                                        "error_ver": error_ver,
+                                        "error_email": error_email})
 
     def get(self):
         self.write_form()
-
 
     def post(self):
         have_error = False
@@ -123,23 +121,41 @@ class MainHandler(webapp2.RequestHandler):
         password = self.request.get('password')
         verify = self.request.get('verify')
         email = self.request.get('email')
-        if password != verify:
-            self.write_form()
-        elif not valid_username:
-            self.write_form()
-        elif not valid_password:
-            self.write_form()
-        elif not valid_verify:
-            self.write_form()
-        elif not valid_email:
-            self.write_form()
-        else:
-            self.redirect("/success")
+        error_name = ""
+        error_pass = ""
+        error_ver = ""
+        error_email = ""
 
+
+        if not valid_username(username):
+            have_error = True
+            error_name = "Please enter a valid username."
+
+        if not valid_password(password):
+            have_error = True
+            password = ""
+            verify = ""
+            error_pass = "Please enter a valid password."
+
+        if password != verify:
+            have_error = True
+            password = ""
+            verify = ""
+            error_ver = "Passwords do not match."
+
+        if not valid_email(email):
+            have_error = True
+            error_email = "Please enter a valid email."
+
+        if have_error == True:
+            self.write_form(username,password,verify,email,error_name,error_pass,error_ver,error_email)
+        else:
+            self.redirect("/success?username=" + username)
 
 class SuccessHandler(webapp2.RequestHandler):
     def get(self):
-        self.response.out.write("Success! Account created.")
+        username = self.request.get('username')
+        self.response.out.write("<h1>Success, %s! Account created.</h1>" % username)
 
 app = webapp2.WSGIApplication([
     ('/', MainHandler),
